@@ -42,6 +42,42 @@ VALUES (%s, %s, %s, %s, %s, %s, %s)
 """
 
 
+def convert_amount(text):
+    value = Decimal(text)
+    if not value.is_finite():
+        raise ValueError("amount must be a finite number")
+    return value
+
+
+FIELD_CONVERTERS = [
+    ("transaction_id", str),
+    ("account_id", int),
+    ("transaction_date", date.fromisoformat),
+    ("transaction_type", str),
+    ("amount", convert_amount),
+    ("branch_id", int),
+]
+
+
+def validate_row(record, line_no):
+    """Check one record (a dict of raw values) and return a typed row tuple.
+
+    Every reader (CSV, TXT, JSON, ...) can reuse this, so error messages
+    always name the line, the column and the invalid value.
+    """
+    row = []
+    for column, convert in FIELD_CONVERTERS:
+        raw = record.get(column)
+        text = "" if raw is None else str(raw).strip()
+        if text == "":
+            raise ValueError(f"line {line_no}: column {column} is missing or empty")
+        try:
+            row.append(convert(text))
+        except Exception:
+            raise ValueError(f"line {line_no}: column {column} has invalid value '{text}'")
+    return tuple(row)
+
+
 def read_delimited(path, delimiter):
     """Read a delimited text file and return validated, typed rows."""
     with open(path, newline="") as f:
@@ -53,17 +89,7 @@ def read_delimited(path, delimiter):
         for line_no, r in enumerate(reader, start=2):
             if None in r:
                 raise ValueError(f"line {line_no}: too many fields")
-            try:
-                rows.append((
-                    r["transaction_id"],
-                    int(r["account_id"]),
-                    date.fromisoformat(r["transaction_date"]),
-                    r["transaction_type"],
-                    Decimal(r["amount"]),
-                    int(r["branch_id"]),
-                ))
-            except Exception as exc:
-                raise ValueError(f"line {line_no}: bad value ({exc})")
+            rows.append(validate_row(r, line_no))
     return rows
 
 
