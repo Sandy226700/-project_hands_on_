@@ -59,22 +59,23 @@ FIELD_CONVERTERS = [
 ]
 
 
-def validate_row(record, line_no):
+def validate_row(record, where):
     """Check one record (a dict of raw values) and return a typed row tuple.
 
-    Every reader (CSV, TXT, JSON, ...) can reuse this, so error messages
-    always name the line, the column and the invalid value.
+    `where` says where the record came from, e.g. "line 1002" for a text
+    file or "record 1002" for JSON, so errors always name the place, the
+    column and the invalid value.
     """
     row = []
     for column, convert in FIELD_CONVERTERS:
         raw = record.get(column)
         text = "" if raw is None else str(raw).strip()
         if text == "":
-            raise ValueError(f"line {line_no}: column {column} is missing or empty")
+            raise ValueError(f"{where}: column {column} is missing or empty")
         try:
             row.append(convert(text))
         except Exception:
-            raise ValueError(f"line {line_no}: column {column} has invalid value '{text}'")
+            raise ValueError(f"{where}: column {column} has invalid value '{text}'")
     return tuple(row)
 
 
@@ -89,7 +90,7 @@ def read_delimited(path, delimiter):
         for line_no, r in enumerate(reader, start=2):
             if None in r:
                 raise ValueError(f"line {line_no}: too many fields")
-            rows.append(validate_row(r, line_no))
+            rows.append(validate_row(r, f"line {line_no}"))
     return rows
 
 
@@ -105,7 +106,8 @@ def write_audit(conn, source_name, target, rows_read, rows_loaded, status, messa
     conn.commit()
 
 
-def run_ingestion(source, target, delimiter):
+def run_ingestion(source, target, reader):
+    """Load `source` into `target`. `reader(path)` returns validated rows."""
     source = Path(source)
     conn = connect()
 
@@ -122,7 +124,7 @@ def run_ingestion(source, target, delimiter):
         if not source.exists():
             raise FileNotFoundError(f"{source} not found")
 
-        rows = read_delimited(source, delimiter)
+        rows = reader(source)
         rows_read = len(rows)
         if rows_read == 0:
             raise ValueError("source file has no data rows")
