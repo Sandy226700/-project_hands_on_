@@ -26,6 +26,9 @@ ORDER BY transaction_date, branch_id
 
 
 def main():
+    # Remove any previous report first, so a failed run never leaves a stale file behind
+    if OUT.exists():
+        OUT.unlink()
     env = get_environment()
     conn = connect()
     with conn.cursor() as cur:
