@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS dq_results (
 # (rule id, severity, description, SQL that counts the offending rows)
 # The thresholds are assumptions to confirm with the business.
 RULES = [
+    ("R0", "ERROR", "stg_csv has no rows",
+     "SELECT CASE WHEN COUNT(*) = 0 THEN 1 ELSE 0 END FROM stg_csv"),
     ("R1", "ERROR", "duplicate business key (account, date, type, amount, branch)",
      "SELECT COALESCE(SUM(c), 0) FROM ("
      "SELECT COUNT(*) AS c FROM stg_csv "
